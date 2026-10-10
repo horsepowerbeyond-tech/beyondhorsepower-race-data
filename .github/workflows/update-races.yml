@@ -50,6 +50,33 @@ jobs:
         run: pip install -r requirements.txt
       - name: Check worker and publisher
         run: python -m unittest discover -s tests -v
+      - name: Check race data source access
+        run: |
+          python - <<'PY'
+          import fastf1
+          import requests
+          from fastf1 import _api
+
+          session = fastf1.get_session(2026, 15, "R")
+          print("Checking:", session.event.EventName, flush=True)
+
+          for host in [_api.base_url, _api.base_url_mirror]:
+              for page in ["SessionInfo.jsonStream", "TimingData.jsonStream"]:
+                  url = host + session.api_path + page
+                  try:
+                      with requests.get(
+                          url,
+                          headers=_api.headers,
+                          stream=True,
+                          timeout=20,
+                      ) as response:
+                          print(
+                              host, page, "HTTP", response.status_code,
+                              flush=True,
+                          )
+                  except requests.RequestException as error:
+                      print(host, page, type(error).__name__, str(error), flush=True)
+          PY
       - name: Prepare completed races and calendar
         env:
           RACE_YEAR: ${{ inputs.year || vars.RACE_YEAR }}
